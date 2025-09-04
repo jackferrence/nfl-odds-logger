@@ -339,6 +339,72 @@ HTML_TEMPLATE = """
             font-style: italic;
             font-size: 0.9rem;
         }
+        .movement-section {
+            background: #e8f4fd;
+            border-radius: 6px;
+            padding: 10px;
+            margin-bottom: 15px;
+            border-left: 3px solid #17a2b8;
+        }
+        .movement-bookmaker {
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 8px;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .movement-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 0;
+            border-bottom: 1px solid #dee2e6;
+            font-size: 0.85rem;
+        }
+        .movement-row:last-child {
+            border-bottom: none;
+        }
+        .movement-row.moved-up {
+            background: rgba(40, 167, 69, 0.1);
+            border-left: 2px solid #28a745;
+        }
+        .movement-row.moved-down {
+            background: rgba(220, 53, 69, 0.1);
+            border-left: 2px solid #dc3545;
+        }
+        .movement-team {
+            font-weight: 500;
+            color: #495057;
+            flex: 1;
+        }
+        .movement-odds {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .current-odds {
+            font-weight: bold;
+            color: #667eea;
+            font-size: 0.85rem;
+        }
+        .movement-arrow {
+            font-size: 0.75rem;
+            color: #6c757d;
+        }
+        .previous-odds {
+            font-size: 0.75rem;
+            color: #6c757d;
+        }
+        .point-display {
+            font-size: 0.75rem;
+            color: #6c757d;
+        }
+        .point-up {
+            color: #28a745;
+            font-weight: bold;
+        }
+
     </style>
 </head>
 <body>
@@ -777,6 +843,9 @@ def generate_games_html(games):
                 <div class="odds-grid">
         '''
         
+        # Get previous odds for movement comparison
+        previous_odds = get_previous_odds(game_id, game_data['bookmakers'])
+        
         # Create columns for each bet type
         bet_types = ['spreads', 'h2h', 'totals']
         bet_type_labels = ['Point Spread', 'Moneyline', 'Total']
@@ -792,6 +861,13 @@ def generate_games_html(games):
                     bookmakers_for_type[bookmaker] = markets[bet_type]
             
             if bookmakers_for_type:
+                # Calculate movement for this bet type
+                movement_data = calculate_movement(game_data['bookmakers'], previous_odds, bet_type)
+                movement_html = format_movement_display(movement_data, bet_type)
+                
+                if movement_html:
+                    game_html += f'<div class="movement-section">{movement_html}</div>'
+                
                 for bookmaker, odds in bookmakers_for_type.items():
                     game_html += f'<div class="bookmaker-row">'
                     game_html += f'<div class="bookmaker-name">{bookmaker}</div>'
@@ -985,6 +1061,197 @@ def organize_graph_data(df, game_id):
         'moneyline': moneyline_data if moneyline_data else None,
         'totals': totals_data if totals_data else None
     }
+
+def get_previous_odds(game_id, current_data):
+    """Get previous odds for comparison"""
+    csv_files = glob.glob("nfl_odds_*.csv")
+    if not csv_files:
+        return None
+    
+    # Sort files by date (oldest first) and get the second most recent
+    sorted_files = sorted(csv_files, key=os.path.getctime)
+    if len(sorted_files) < 2:
+        return None
+    
+    previous_file = sorted_files[-2]  # Second most recent file
+    
+    try:
+        df = pd.read_csv(previous_file)
+        game_data = df[df['game_id'] == game_id]
+        if game_data.empty:
+            return None
+        
+        # Organize previous data similar to current data
+        previous_odds = {}
+        for _, row in game_data.iterrows():
+            bookmaker = row['bookmaker']
+            market = row['market']
+            outcome_name = row['outcome_name']
+            price = row['price']
+            point = row['point']
+            
+            if bookmaker not in previous_odds:
+                previous_odds[bookmaker] = {}
+            
+            if market not in previous_odds[bookmaker]:
+                previous_odds[bookmaker][market] = []
+            
+            previous_odds[bookmaker][market].append({
+                'outcome_name': outcome_name,
+                'price': price,
+                'point': point
+            })
+        
+        return previous_odds
+    except:
+        return None
+
+def calculate_movement(current_odds, previous_odds, bet_type):
+    """Calculate the movement between current and previous odds"""
+    if not previous_odds:
+        return None
+    
+    movements = {}
+    
+    for bookmaker in current_odds:
+        if bookmaker not in previous_odds:
+            continue
+            
+        if bet_type not in current_odds[bookmaker] or bet_type not in previous_odds[bookmaker]:
+            continue
+        
+        current_data = current_odds[bookmaker][bet_type]
+        previous_data = previous_odds[bookmaker][bet_type]
+        
+        movements[bookmaker] = []
+        
+        for current_odd in current_data:
+            team_name = current_odd['outcome_name']
+            current_price = current_odd['price']
+            current_point = current_odd['point']
+            
+            # Find matching previous odd
+            previous_odd = None
+            for prev in previous_data:
+                if prev['outcome_name'] == team_name:
+                    previous_odd = prev
+                    break
+            
+            if previous_odd:
+                prev_price = previous_odd['price']
+                prev_point = previous_odd['point']
+                
+                # Calculate price movement
+                price_change = current_price - prev_price
+                price_change_pct = ((current_price - prev_price) / abs(prev_price)) * 100 if prev_price != 0 else 0
+                
+                # Calculate point movement (for spreads/totals)
+                point_change = None
+                if pd.notna(current_point) and pd.notna(prev_point) and current_point != "" and prev_point != "":
+                    point_change = float(current_point) - float(prev_point)
+                
+                movements[bookmaker].append({
+                    'team': team_name,
+                    'current_price': current_price,
+                    'previous_price': prev_price,
+                    'price_change': price_change,
+                    'price_change_pct': price_change_pct,
+                    'current_point': current_point,
+                    'previous_point': prev_point,
+                    'point_change': point_change
+                })
+            else:
+                # New team/line
+                movements[bookmaker].append({
+                    'team': team_name,
+                    'current_price': current_price,
+                    'previous_price': None,
+                    'price_change': None,
+                    'price_change_pct': None,
+                    'current_point': current_point,
+                    'previous_point': None,
+                    'point_change': None
+                })
+    
+    return movements
+
+def format_movement_display(movement_data, bet_type):
+    """Format movement data for display"""
+    if not movement_data:
+        return ""
+    
+    html_parts = []
+    
+    for bookmaker, movements in movement_data.items():
+        html_parts.append(f'<div class="movement-bookmaker">{bookmaker}</div>')
+        
+        for movement in movements:
+            team = movement['team']
+            current_price = movement['current_price']
+            previous_price = movement['previous_price']
+            price_change = movement['price_change']
+            price_change_pct = movement['price_change_pct']
+            current_point = movement['current_point']
+            previous_point = movement['previous_point']
+            point_change = movement['point_change']
+            
+            # Format current price
+            if current_price > 0:
+                current_price_display = f"+{current_price}"
+            else:
+                current_price_display = str(current_price)
+            
+            # Format previous price
+            if previous_price is not None:
+                if previous_price > 0:
+                    previous_price_display = f"+{previous_price}"
+                else:
+                    previous_price_display = str(previous_price)
+            else:
+                previous_price_display = "NEW"
+            
+            # Format point display
+            point_display = ""
+            if pd.notna(current_point) and current_point != "":
+                if bet_type == 'totals':
+                    point_display = f"O/U {current_point}"
+                else:
+                    point_display = f"({current_point})"
+            
+            # Determine movement direction and color
+            movement_class = "no-change"
+            movement_arrow = "→"
+            
+            if price_change is not None:
+                if price_change > 0:
+                    movement_class = "moved-up"
+                    movement_arrow = "↗"
+                elif price_change < 0:
+                    movement_class = "moved-down"
+                    movement_arrow = "↘"
+            
+            # Point movement for spreads/totals
+            point_movement_display = ""
+            if point_change is not None:
+                if point_change > 0:
+                    point_movement_display = f" <span class='point-up'>+{point_change:.1f}</span>"
+                elif point_change < 0:
+                    point_movement_display = f" <span class='point-down'>{point_change:.1f}</span>"
+            
+            html_parts.append(f'''
+            <div class="movement-row {movement_class}">
+                <div class="movement-team">{team}</div>
+                <div class="movement-odds">
+                    <span class="current-odds">{current_price_display}</span>
+                    <span class="movement-arrow">{movement_arrow}</span>
+                    <span class="previous-odds">{previous_price_display}</span>
+                    <span class="point-display">{point_display}</span>
+                    {point_movement_display}
+                </div>
+            </div>
+            ''')
+    
+    return '\n'.join(html_parts)
 
 def get_latest_csv_file():
     """Get the most recent CSV file"""
