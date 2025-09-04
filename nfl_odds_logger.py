@@ -100,70 +100,9 @@ def save_to_csv(data):
                             'point': outcome.get('point', '')
                         })
     
-    # Also save to game-specific files for permanent storage
-    save_game_specific_data(data)
-    
     print(f"✅ Data saved to {filename}")
 
-def save_game_specific_data(data):
-    """Save data to game-specific CSV files for permanent storage"""
-    if not data:
-        return
-    
-    # Create games directory if it doesn't exist
-    games_dir = "games"
-    if not os.path.exists(games_dir):
-        os.makedirs(games_dir)
-    
-    # Group data by game
-    for game in data:
-        game_id = game['id']
-        home_team = game['home_team']
-        away_team = game['away_team']
-        commence_time = game['commence_time']
-        
-        # Parse commence time for date
-        try:
-            game_date = datetime.fromisoformat(commence_time.replace('Z', '+00:00'))
-            date_str = game_date.strftime('%Y-%m-%d')
-        except:
-            date_str = datetime.now().strftime('%Y-%m-%d')
-        
-        # Create filename: games/YYYY-MM-DD_away_home_gameid.csv
-        safe_away = away_team.replace(' ', '_').replace('&', 'and')
-        safe_home = home_team.replace(' ', '_').replace('&', 'and')
-        filename = f"{date_str}_{safe_away}_at_{safe_home}_{game_id}.csv"
-        filepath = os.path.join(games_dir, filename)
-        
-        # Check if file exists to determine if we need headers
-        file_exists = os.path.exists(filepath)
-        
-        # Save game-specific data
-        with open(filepath, 'a', newline='', encoding='utf-8') as csvfile:
-            fieldnames = ['timestamp', 'game_id', 'commence_time', 'home_team', 'away_team', 
-                         'bookmaker', 'market', 'outcome_name', 'price', 'point']
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            
-            if not file_exists:
-                writer.writeheader()
-            
-            for bookmaker in game['bookmakers']:
-                for market in bookmaker['markets']:
-                    for outcome in market['outcomes']:
-                        writer.writerow({
-                            'timestamp': datetime.now().isoformat(),
-                            'game_id': game['id'],
-                            'commence_time': game['commence_time'],
-                            'home_team': game['home_team'],
-                            'away_team': game['away_team'],
-                            'bookmaker': bookmaker['key'],
-                            'market': market['key'],
-                            'outcome_name': outcome['name'],
-                            'price': outcome['price'],
-                            'point': outcome.get('point', '')
-                        })
-        
-        print(f"💾 Saved game data: {filename}")
+
 
 
 # -------------------------
