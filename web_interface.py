@@ -135,6 +135,23 @@ HTML_TEMPLATE = """
             justify-content: space-between;
             align-items: center;
         }
+        .game-actions {
+            display: flex;
+            gap: 10px;
+        }
+        .graph-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background 0.2s;
+        }
+        .graph-btn:hover {
+            background: #5a6fd8;
+        }
         .game-teams {
             font-size: 1.3rem;
             font-weight: bold;
@@ -1053,12 +1070,12 @@ def generate_games_html(games):
     for game_id, game_data in games.items():
         # Game header
         game_html = f'''
-        <div class="game-card" id="game-{game_id}" onclick="toggleGame('{game_id}')">
+        <div class="game-card" id="game-{game_id}">
             <div class="game-header">
                 <div class="game-teams">{game_data['away_team']} @ {game_data['home_team']}</div>
-                <div class="game-time">
-                    {format_game_time(game_data['commence_time'])}
-                    <span class="expand-icon" id="expand-{game_id}">▼</span>
+                <div class="game-time">{format_game_time(game_data['commence_time'])}</div>
+                <div class="game-actions">
+                    <button class="graph-btn" onclick="toggleGame('{game_id}')">📊 View Graphs</button>
                 </div>
             </div>
             <div class="game-content">
@@ -1186,9 +1203,8 @@ def generate_data_files_html():
     """Generate HTML for data files view"""
     # Get all CSV files
     csv_files = glob.glob("*.csv")
-    game_files = glob.glob("games/*.csv")
     
-    if not csv_files and not game_files:
+    if not csv_files:
         return '<div class="no-files">No data files found yet. Start collecting data to see files here.</div>'
     
     html_parts = []
@@ -1207,39 +1223,6 @@ def generate_data_files_html():
                 html_parts.append(f'''
                 <div class="file-card">
                     <div class="file-name">{csv_file}</div>
-                    <div class="file-info">
-                        📊 Size: {file_size:,} bytes<br>
-                        📅 Created: {file_time.strftime('%Y-%m-%d %H:%M:%S')}
-                    </div>
-                    <div class="file-actions">
-                        <a href="/download/file/{csv_file}" class="file-btn download">📥 Download</a>
-                        <a href="/view/file/{csv_file}" class="file-btn view">👁️ View</a>
-                    </div>
-                </div>
-                ''')
-            except:
-                continue
-        
-        html_parts.append('</div>')
-        html_parts.append('</div>')
-    
-    # Game-specific files section
-    if game_files:
-        html_parts.append('<div class="data-section">')
-        html_parts.append('<h3>🏈 Game-Specific Data Files</h3>')
-        html_parts.append('<div class="file-grid">')
-        
-        for csv_file in sorted(game_files, reverse=True):
-            try:
-                file_size = os.path.getsize(csv_file)
-                file_time = datetime.fromtimestamp(os.path.getctime(csv_file))
-                
-                # Extract game info from filename
-                filename = os.path.basename(csv_file)
-                
-                html_parts.append(f'''
-                <div class="file-card">
-                    <div class="file-name">{filename}</div>
                     <div class="file-info">
                         📊 Size: {file_size:,} bytes<br>
                         📅 Created: {file_time.strftime('%Y-%m-%d %H:%M:%S')}
@@ -1347,6 +1330,9 @@ def organize_graph_data(df, game_id):
     moneyline_underdog_data = {}
     totals_data = {}
     
+    # Track unique timestamps for proper time progression
+    all_timestamps = []
+    
     for _, row in game_data.iterrows():
         bookmaker = row['bookmaker']
         market = row['market']
@@ -1355,7 +1341,8 @@ def organize_graph_data(df, game_id):
         price = row['price']
         point = row['point']
         
-        formatted_time = format_time_for_chart(timestamp)
+        # Store timestamp for later processing
+        all_timestamps.append(timestamp)
         
         if market == 'spreads':
             if bookmaker not in spreads_data:
@@ -1364,7 +1351,7 @@ def organize_graph_data(df, game_id):
             # For spreads, use the point value as the main line
             if pd.notna(point) and point != "":
                 spreads_data[bookmaker].append({
-                    'time': formatted_time,
+                    'timestamp': timestamp,
                     'point': float(point),
                     'team': outcome_name
                 })
@@ -1375,7 +1362,7 @@ def organize_graph_data(df, game_id):
                 if bookmaker not in moneyline_favorite_data:
                     moneyline_favorite_data[bookmaker] = []
                 moneyline_favorite_data[bookmaker].append({
-                    'time': formatted_time,
+                    'timestamp': timestamp,
                     'price': price,
                     'team': outcome_name
                 })
@@ -1383,7 +1370,7 @@ def organize_graph_data(df, game_id):
                 if bookmaker not in moneyline_underdog_data:
                     moneyline_underdog_data[bookmaker] = []
                 moneyline_underdog_data[bookmaker].append({
-                    'time': formatted_time,
+                    'timestamp': timestamp,
                     'price': price,
                     'team': outcome_name
                 })
@@ -1392,17 +1379,40 @@ def organize_graph_data(df, game_id):
             if bookmaker not in totals_data:
                 totals_data[bookmaker] = []
             totals_data[bookmaker].append({
-                'time': formatted_time,
+                'timestamp': timestamp,
                 'point': float(point) if pd.notna(point) and point != "" else None,
                 'price': price,
                 'outcome': outcome_name
             })
     
+    # Sort timestamps and create time labels
+    unique_timestamps = sorted(list(set(all_timestamps)))
+    time_labels = [format_time_for_chart(ts) for ts in unique_timestamps]
+    
+    # Process each data type to ensure proper time progression
+    def process_data_for_time(data_dict):
+        processed = {}
+        for bookmaker, data_points in data_dict.items():
+            # Sort by timestamp and create time-indexed data
+            sorted_data = sorted(data_points, key=lambda x: x['timestamp'])
+            processed[bookmaker] = []
+            
+            for i, data_point in enumerate(sorted_data):
+                processed[bookmaker].append({
+                    'time': time_labels[i] if i < len(time_labels) else time_labels[-1],
+                    'point': data_point.get('point'),
+                    'price': data_point.get('price'),
+                    'team': data_point.get('team'),
+                    'outcome': data_point.get('outcome')
+                })
+        return processed
+    
     return {
-        'spreads': spreads_data if spreads_data else None,
-        'moneyline_favorite': moneyline_favorite_data if moneyline_favorite_data else None,
-        'moneyline_underdog': moneyline_underdog_data if moneyline_underdog_data else None,
-        'totals': totals_data if totals_data else None
+        'spreads': process_data_for_time(spreads_data) if spreads_data else None,
+        'moneyline_favorite': process_data_for_time(moneyline_favorite_data) if moneyline_favorite_data else None,
+        'moneyline_underdog': process_data_for_time(moneyline_underdog_data) if moneyline_underdog_data else None,
+        'totals': process_data_for_time(totals_data) if totals_data else None,
+        'labels': time_labels
     }
 
 def get_previous_odds(game_id, current_data):
