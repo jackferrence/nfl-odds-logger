@@ -26,7 +26,8 @@ def run_web_interface():
     print("🌐 Starting web interface...")
     try:
         from web_interface import app
-        app.run(host='0.0.0.0', port=5000, debug=False)
+        port = int(os.environ.get('PORT', 5000))
+        app.run(host='0.0.0.0', port=port, debug=False)
     except Exception as e:
         print(f"❌ Web interface error: {e}")
 
@@ -34,6 +35,7 @@ def main():
     print("🏈 NFL Odds Logger - Railway Deployment")
     print("=" * 50)
     print("🚀 Starting both scheduler and web interface...")
+    port = os.environ.get('PORT', 5000)
     print("📊 Web dashboard: http://localhost:5000")
     print("⏰ Scheduler: Running in background")
     print("=" * 50)
