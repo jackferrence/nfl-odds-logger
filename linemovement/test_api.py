@@ -24,8 +24,9 @@ def test_api():
     
     # Run the odds logger
     print("🔄 Running odds logger...")
+    print("🎯 Requesting bookmakers: pinnacle,betmgm,draftkings,fanduel,caesars,bovada")
     try:
-        result = subprocess.run([sys.executable, "nfl_odds_logger.py"], 
+        result = subprocess.run(["python3", "nfl_odds_logger.py"], 
                                capture_output=True, text=True, cwd=os.path.dirname(__file__))
         
         print("📋 STDOUT:")
@@ -62,7 +63,7 @@ def test_api():
     # Check API usage
     print("\n📊 Checking API usage...")
     try:
-        result = subprocess.run([sys.executable, "api_usage_tracker.py"], 
+        result = subprocess.run(["python3", "api_usage_tracker.py"], 
                                capture_output=True, text=True, cwd=os.path.dirname(__file__))
         print(result.stdout)
     except Exception as e:

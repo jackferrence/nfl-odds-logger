@@ -17,7 +17,7 @@ def run_odds_logger():
         print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Running NFL odds logger...")
         
         # Run the odds logger script
-        result = subprocess.run([sys.executable, "nfl_odds_logger.py"], 
+        result = subprocess.run(["python3", "nfl_odds_logger.py"], 
                                capture_output=True, text=True, cwd=os.path.dirname(__file__))
         
         if result.returncode == 0:
@@ -132,7 +132,7 @@ def main():
         import schedule
     except ImportError:
         print("Installing schedule package...")
-        subprocess.run([sys.executable, "-m", "pip", "install", "schedule"])
+        subprocess.run(["python3", "-m", "pip", "install", "schedule"])
         import schedule
     
     # Set up the schedule

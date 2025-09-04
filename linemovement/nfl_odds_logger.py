@@ -13,6 +13,8 @@ REGION = "us"  # "us", "uk", "au", "eu"
 MARKETS = "h2h,spreads,totals"  # moneyline, spreads, totals
 ODDS_FORMAT = "american"  # "american" or "decimal"
 DATE_FORMAT = "%Y-%m-%d"
+# Key bookmakers to track (Pinnacle is crucial for line movements)
+BOOKMAKERS = "pinnacle,betmgm,draftkings,fanduel,caesars,bovada"
 
 # -------------------------
 # FUNCTIONS
@@ -24,6 +26,7 @@ def fetch_odds():
         "regions": REGION,
         "markets": MARKETS,
         "oddsFormat": ODDS_FORMAT,
+        "bookmakers": BOOKMAKERS,  # Specify key bookmakers including Pinnacle
     }
     response = requests.get(url, params=params)
 
@@ -128,6 +131,19 @@ if __name__ == "__main__":
     
     if odds_data:
         print(f"✅ Fetched data for {len(odds_data)} games")
+        
+        # Log which bookmakers we got data from
+        all_bookmakers = set()
+        for game in odds_data:
+            for bookmaker in game.get('bookmakers', []):
+                all_bookmakers.add(bookmaker['key'])
+        
+        print(f"📊 Bookmakers with data: {', '.join(sorted(all_bookmakers))}")
+        if 'pinnacle' in all_bookmakers:
+            print("✅ Pinnacle data included!")
+        else:
+            print("⚠️ Pinnacle data not found - may not be available for current games")
+        
         save_to_csv(odds_data)
         record_api_usage()  # Track API usage
         print("✅ Data collection completed successfully!")
