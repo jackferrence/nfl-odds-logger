@@ -268,6 +268,77 @@ HTML_TEMPLATE = """
         .expand-icon.expanded {
             transform: rotate(180deg);
         }
+        .odds-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .bet-column {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            border-left: 3px solid #667eea;
+        }
+        .bet-header {
+            font-size: 1rem;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 12px;
+            padding-bottom: 6px;
+            border-bottom: 2px solid #ecf0f1;
+            text-align: center;
+        }
+        .bookmaker-row {
+            margin-bottom: 10px;
+            padding: 8px;
+            background: white;
+            border-radius: 6px;
+            border: 1px solid #e9ecef;
+        }
+        .bookmaker-name {
+            font-weight: bold;
+            color: #495057;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+        }
+        .odds-display {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 4px 0;
+            font-size: 0.9rem;
+        }
+        .team-name {
+            font-weight: 500;
+            color: #495057;
+            flex: 1;
+        }
+        .odds-values {
+            text-align: right;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+        }
+        .odds-value {
+            font-weight: bold;
+            color: #667eea;
+            font-size: 0.9rem;
+        }
+        .point-value {
+            color: #6c757d;
+            font-size: 0.8rem;
+            margin-top: 2px;
+        }
+        .no-odds {
+            text-align: center;
+            padding: 15px;
+            color: #6c757d;
+            font-style: italic;
+            font-size: 0.9rem;
+        }
     </style>
 </head>
 <body>
@@ -340,7 +411,10 @@ HTML_TEMPLATE = """
         }
 
         // Toggle graph tabs
-        function showGraphTab(gameId, tabName) {
+        function showGraphTab(gameId, tabName, event) {
+            // Prevent the click from bubbling up to the game card
+            event.stopPropagation();
+            
             // Hide all tabs
             const tabs = document.querySelectorAll(`[data-game="${gameId}"] .graph-tab`);
             const contents = document.querySelectorAll(`[data-game="${gameId}"] .graph-content`);
@@ -376,24 +450,50 @@ HTML_TEMPLATE = """
 
             const datasets = [];
             const colors = ['#667eea', '#764ba2', '#f093fb', '#f5576c', '#4facfe', '#00f2fe'];
+            let colorIndex = 0;
             
-            Object.keys(data).forEach((bookmaker, index) => {
-                const color = colors[index % colors.length];
-                datasets.push({
-                    label: bookmaker,
-                    data: data[bookmaker].map(point => point.point),
-                    borderColor: color,
-                    backgroundColor: color + '20',
-                    tension: 0.1,
-                    pointRadius: 3,
-                    pointHoverRadius: 5
-                });
+            Object.keys(data).forEach((bookmaker) => {
+                const color = colors[colorIndex % colors.length];
+                
+                // Create dataset for favorite line
+                if (data[bookmaker].favorite && data[bookmaker].favorite.length > 0) {
+                    datasets.push({
+                        label: `${bookmaker} - Favorite`,
+                        data: data[bookmaker].favorite.map(point => point.point),
+                        borderColor: color,
+                        backgroundColor: color + '20',
+                        tension: 0.1,
+                        pointRadius: 3,
+                        pointHoverRadius: 5
+                    });
+                }
+                
+                // Create dataset for underdog line
+                if (data[bookmaker].underdog && data[bookmaker].underdog.length > 0) {
+                    datasets.push({
+                        label: `${bookmaker} - Underdog`,
+                        data: data[bookmaker].underdog.map(point => point.point),
+                        borderColor: color,
+                        backgroundColor: color + '20',
+                        tension: 0.1,
+                        pointRadius: 3,
+                        pointHoverRadius: 5,
+                        borderDash: [5, 5]  // Dashed line for underdog
+                    });
+                }
+                
+                colorIndex++;
             });
+
+            // Get time labels from the first bookmaker with data
+            const firstBookmaker = Object.keys(data)[0];
+            const timeLabels = data[firstBookmaker]?.favorite?.map(point => point.time) || 
+                              data[firstBookmaker]?.underdog?.map(point => point.time) || [];
 
             new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: data[Object.keys(data)[0]]?.map(point => point.time) || [],
+                    labels: timeLabels,
                     datasets: datasets
                 },
                 options: {
@@ -433,24 +533,50 @@ HTML_TEMPLATE = """
 
             const datasets = [];
             const colors = ['#667eea', '#764ba2', '#f093fb', '#f5576c', '#4facfe', '#00f2fe'];
+            let colorIndex = 0;
             
-            Object.keys(data).forEach((bookmaker, index) => {
-                const color = colors[index % colors.length];
-                datasets.push({
-                    label: bookmaker,
-                    data: data[bookmaker].map(point => point.price),
-                    borderColor: color,
-                    backgroundColor: color + '20',
-                    tension: 0.1,
-                    pointRadius: 3,
-                    pointHoverRadius: 5
-                });
+            Object.keys(data).forEach((bookmaker) => {
+                const color = colors[colorIndex % colors.length];
+                
+                // Create dataset for favorite
+                if (data[bookmaker].favorite && data[bookmaker].favorite.length > 0) {
+                    datasets.push({
+                        label: `${bookmaker} - Favorite`,
+                        data: data[bookmaker].favorite.map(point => point.price),
+                        borderColor: color,
+                        backgroundColor: color + '20',
+                        tension: 0.1,
+                        pointRadius: 3,
+                        pointHoverRadius: 5
+                    });
+                }
+                
+                // Create dataset for underdog
+                if (data[bookmaker].underdog && data[bookmaker].underdog.length > 0) {
+                    datasets.push({
+                        label: `${bookmaker} - Underdog`,
+                        data: data[bookmaker].underdog.map(point => point.price),
+                        borderColor: color,
+                        backgroundColor: color + '20',
+                        tension: 0.1,
+                        pointRadius: 3,
+                        pointHoverRadius: 5,
+                        borderDash: [5, 5]  // Dashed line for underdog
+                    });
+                }
+                
+                colorIndex++;
             });
+
+            // Get time labels from the first bookmaker with data
+            const firstBookmaker = Object.keys(data)[0];
+            const timeLabels = data[firstBookmaker]?.favorite?.map(point => point.time) || 
+                              data[firstBookmaker]?.underdog?.map(point => point.time) || [];
 
             new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: data[Object.keys(data)[0]]?.map(point => point.time) || [],
+                    labels: timeLabels,
                     datasets: datasets
                 },
                 options: {
@@ -648,74 +774,78 @@ def generate_games_html(games):
                 </div>
             </div>
             <div class="game-content">
+                <div class="odds-grid">
         '''
         
-        # Process each bookmaker for overview
-        for bookmaker, markets in game_data['bookmakers'].items():
-            for market, odds in markets.items():
-                # Market title
-                market_title = market.upper()
-                if market == 'h2h':
-                    market_title = 'MONEYLINE'
-                elif market == 'spreads':
-                    market_title = 'POINT SPREAD'
-                elif market == 'totals':
-                    market_title = 'TOTAL POINTS'
-                
-                game_html += f'<div class="bet-type-section">'
-                game_html += f'<div class="bet-type-title">{market_title}</div>'
-                game_html += f'<div class="bookmakers-grid">'
-                
-                # Bookmaker card
-                game_html += f'<div class="bookmaker-card">'
-                game_html += f'<div class="bookmaker-name">{bookmaker}</div>'
-                
-                for odd in odds:
-                    team_name = odd['outcome_name']
-                    price = odd['price']
-                    point = odd['point']
-                    
-                    # Format price
-                    if price > 0:
-                        price_display = f"+{price}"
-                    else:
-                        price_display = str(price)
-                    
-                    # Format point (for spreads/totals)
-                    point_display = ""
-                    if pd.notna(point) and point != "":
-                        if market == 'totals':
-                            point_display = f"O/U {point}"
-                        else:
-                            point_display = f"({point})"
-                    
-                    game_html += f'''
-                    <div class="odds-row">
-                        <span class="team-name">{team_name}</span>
-                        <div>
-                            <span class="odds-value">{price_display}</span>
-                            <span class="point-value">{point_display}</span>
-                        </div>
-                    </div>
-                    '''
-                
-                game_html += '</div>'  # Close bookmaker-card
-                game_html += '</div>'  # Close bookmakers-grid
-                game_html += '</div>'  # Close bet-type-section
+        # Create columns for each bet type
+        bet_types = ['spreads', 'h2h', 'totals']
+        bet_type_labels = ['Point Spread', 'Moneyline', 'Total']
         
+        for i, (bet_type, label) in enumerate(zip(bet_types, bet_type_labels)):
+            game_html += f'<div class="bet-column">'
+            game_html += f'<div class="bet-header">{label}</div>'
+            
+            # Get all bookmakers for this bet type
+            bookmakers_for_type = {}
+            for bookmaker, markets in game_data['bookmakers'].items():
+                if bet_type in markets:
+                    bookmakers_for_type[bookmaker] = markets[bet_type]
+            
+            if bookmakers_for_type:
+                for bookmaker, odds in bookmakers_for_type.items():
+                    game_html += f'<div class="bookmaker-row">'
+                    game_html += f'<div class="bookmaker-name">{bookmaker}</div>'
+                    
+                    # Display odds for this bookmaker
+                    for odd in odds:
+                        team_name = odd['outcome_name']
+                        price = odd['price']
+                        point = odd['point']
+                        
+                        # Format price
+                        if price > 0:
+                            price_display = f"+{price}"
+                        else:
+                            price_display = str(price)
+                        
+                        # Format point (for spreads/totals)
+                        point_display = ""
+                        if pd.notna(point) and point != "":
+                            if bet_type == 'totals':
+                                point_display = f"O/U {point}"
+                            else:
+                                point_display = f"({point})"
+                        
+                        game_html += f'''
+                        <div class="odds-display">
+                            <span class="team-name">{team_name}</span>
+                            <div class="odds-values">
+                                <span class="odds-value">{price_display}</span>
+                                <span class="point-value">{point_display}</span>
+                            </div>
+                        </div>
+                        '''
+                    
+                    game_html += '</div>'  # Close bookmaker-row
+            else:
+                game_html += '<div class="no-odds">No data</div>'
+            
+            game_html += '</div>'  # Close bet-column
+        
+        game_html += '</div>'  # Close odds-grid
         game_html += '</div>'  # Close game-content
         
         # Add expandable details section with graphs
         game_html += f'''
         <div class="game-details" id="details-{game_id}" data-game="{game_id}">
             <div class="graph-tabs">
-                <button class="graph-tab active" id="tab-{game_id}-spreads" onclick="showGraphTab('{game_id}', 'spreads')">
+                <button class="graph-tab active" id="tab-{game_id}-spreads" onclick="showGraphTab('{game_id}', 'spreads', event)">
                     Point Spreads
                 </button>
-                <button class="graph-tab" id="tab-{game_id}-moneyline" onclick="showGraphTab('{game_id}', 'moneyline')">
+                <button class="graph-tab" id="tab-{game_id}-moneyline" onclick="showGraphTab('{game_id}', 'moneyline', event)">
                     Moneyline
                 </button>
-                <button class="graph-tab" id="tab-{game_id}-totals" onclick="showGraphTab('{game_id}', 'totals')">
+                <button class="graph-tab" id="tab-{game_id}-totals" onclick="showGraphTab('{game_id}', 'totals', event)">
                     Totals
                 </button>
             </div>
@@ -781,6 +911,10 @@ def organize_graph_data(df, game_id):
     if game_data.empty:
         return None
     
+    # Get home and away team names
+    home_team = game_data['home_team'].iloc[0]
+    away_team = game_data['away_team'].iloc[0]
+    
     # Organize by market type
     spreads_data = {}
     moneyline_data = {}
@@ -798,27 +932,52 @@ def organize_graph_data(df, game_id):
         
         if market == 'spreads':
             if bookmaker not in spreads_data:
-                spreads_data[bookmaker] = []
-            spreads_data[bookmaker].append({
-                'time': formatted_time,
-                'point': float(point) if pd.notna(point) and point != "" else None,
-                'price': price
-            })
+                spreads_data[bookmaker] = {'favorite': [], 'underdog': []}
+            
+            # Determine if this is favorite or underdog based on point
+            if pd.notna(point) and point != "":
+                point_val = float(point)
+                if point_val < 0:  # Negative point = favorite
+                    spreads_data[bookmaker]['favorite'].append({
+                        'time': formatted_time,
+                        'point': abs(point_val),
+                        'price': price,
+                        'team': outcome_name
+                    })
+                else:  # Positive point = underdog
+                    spreads_data[bookmaker]['underdog'].append({
+                        'time': formatted_time,
+                        'point': point_val,
+                        'price': price,
+                        'team': outcome_name
+                    })
+        
         elif market == 'h2h':
             if bookmaker not in moneyline_data:
-                moneyline_data[bookmaker] = []
-            moneyline_data[bookmaker].append({
-                'time': formatted_time,
-                'price': price,
-                'outcome': outcome_name
-            })
+                moneyline_data[bookmaker] = {'favorite': [], 'underdog': []}
+            
+            # Determine favorite vs underdog based on price
+            if price < 0:  # Negative price = favorite
+                moneyline_data[bookmaker]['favorite'].append({
+                    'time': formatted_time,
+                    'price': price,
+                    'team': outcome_name
+                })
+            else:  # Positive price = underdog
+                moneyline_data[bookmaker]['underdog'].append({
+                    'time': formatted_time,
+                    'price': price,
+                    'team': outcome_name
+                })
+        
         elif market == 'totals':
             if bookmaker not in totals_data:
                 totals_data[bookmaker] = []
             totals_data[bookmaker].append({
                 'time': formatted_time,
                 'point': float(point) if pd.notna(point) and point != "" else None,
-                'price': price
+                'price': price,
+                'outcome': outcome_name
             })
     
     return {
