@@ -1,11 +1,11 @@
 [phases.setup]
-nixPkgs = ["python311", "python311Packages.pip", "python311Packages.requests", "python311Packages.schedule", "python311Packages.flask", "python311Packages.pandas", "python311Packages.gunicorn", "python311Packages.pytz"]
+nixPkgs = ["python311", "python311Packages.requests", "python311Packages.schedule", "python311Packages.flask", "python311Packages.pandas", "python311Packages.gunicorn", "python311Packages.pytz"]
 
 [phases.install]
-cmds = ["echo 'Dependencies installed via Nix packages'"]
+cmds = []
 
 [phases.build]
-cmds = ["echo 'No build step needed for Python app'"]
+cmds = []
 
 [start]
 cmd = "python3 app.py"
