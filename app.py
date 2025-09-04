@@ -42,7 +42,7 @@ def main():
     
     # Install dependencies
     print("📦 Installing dependencies...")
-    subprocess.run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
+    subprocess.run(["python3", "-m", "pip", "install", "-r", "requirements.txt"])
     
     # Start scheduler in background thread
     scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
