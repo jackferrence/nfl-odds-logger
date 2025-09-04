@@ -1,11 +1,16 @@
 [phases.setup]
-nixPkgs = ["python311", "python311Packages.pip", "python311Packages.setuptools"]
+nixPkgs = [
+  "python311", 
+  "python311Packages.requests", 
+  "python311Packages.schedule", 
+  "python311Packages.flask", 
+  "python311Packages.pandas", 
+  "python311Packages.gunicorn", 
+  "python311Packages.pytz"
+]
 
 [phases.install]
-cmds = [
-  "python3 -m ensurepip --upgrade",
-  "python3 -m pip install --break-system-packages -r linemovement/requirements.txt"
-]
+cmds = []
 
 [phases.build]
 cmds = []
