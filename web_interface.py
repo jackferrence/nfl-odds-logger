@@ -516,16 +516,14 @@ HTML_TEMPLATE = """
 
             const datasets = [];
             const colors = ['#667eea', '#764ba2', '#f093fb', '#f5576c', '#4facfe', '#00f2fe'];
-            let colorIndex = 0;
             
-            Object.keys(data).forEach((bookmaker) => {
-                const color = colors[colorIndex % colors.length];
+            Object.keys(data).forEach((bookmaker, index) => {
+                const color = colors[index % colors.length];
                 
-                // Create dataset for favorite line
-                if (data[bookmaker].favorite && data[bookmaker].favorite.length > 0) {
+                if (data[bookmaker] && data[bookmaker].length > 0) {
                     datasets.push({
-                        label: `${bookmaker} - Favorite`,
-                        data: data[bookmaker].favorite.map(point => point.point),
+                        label: bookmaker,
+                        data: data[bookmaker].map(point => point.point),
                         borderColor: color,
                         backgroundColor: color + '20',
                         tension: 0.1,
@@ -533,28 +531,11 @@ HTML_TEMPLATE = """
                         pointHoverRadius: 5
                     });
                 }
-                
-                // Create dataset for underdog line
-                if (data[bookmaker].underdog && data[bookmaker].underdog.length > 0) {
-                    datasets.push({
-                        label: `${bookmaker} - Underdog`,
-                        data: data[bookmaker].underdog.map(point => point.point),
-                        borderColor: color,
-                        backgroundColor: color + '20',
-                        tension: 0.1,
-                        pointRadius: 3,
-                        pointHoverRadius: 5,
-                        borderDash: [5, 5]  // Dashed line for underdog
-                    });
-                }
-                
-                colorIndex++;
             });
 
             // Get time labels from the first bookmaker with data
             const firstBookmaker = Object.keys(data)[0];
-            const timeLabels = data[firstBookmaker]?.favorite?.map(point => point.time) || 
-                              data[firstBookmaker]?.underdog?.map(point => point.time) || [];
+            const timeLabels = data[firstBookmaker]?.map(point => point.time) || [];
 
             new Chart(ctx, {
                 type: 'line',
@@ -599,16 +580,14 @@ HTML_TEMPLATE = """
 
             const datasets = [];
             const colors = ['#667eea', '#764ba2', '#f093fb', '#f5576c', '#4facfe', '#00f2fe'];
-            let colorIndex = 0;
             
-            Object.keys(data).forEach((bookmaker) => {
-                const color = colors[colorIndex % colors.length];
+            Object.keys(data).forEach((bookmaker, index) => {
+                const color = colors[index % colors.length];
                 
-                // Create dataset for favorite
-                if (data[bookmaker].favorite && data[bookmaker].favorite.length > 0) {
+                if (data[bookmaker] && data[bookmaker].length > 0) {
                     datasets.push({
-                        label: `${bookmaker} - Favorite`,
-                        data: data[bookmaker].favorite.map(point => point.price),
+                        label: bookmaker,
+                        data: data[bookmaker].map(point => point.price),
                         borderColor: color,
                         backgroundColor: color + '20',
                         tension: 0.1,
@@ -616,28 +595,11 @@ HTML_TEMPLATE = """
                         pointHoverRadius: 5
                     });
                 }
-                
-                // Create dataset for underdog
-                if (data[bookmaker].underdog && data[bookmaker].underdog.length > 0) {
-                    datasets.push({
-                        label: `${bookmaker} - Underdog`,
-                        data: data[bookmaker].underdog.map(point => point.price),
-                        borderColor: color,
-                        backgroundColor: color + '20',
-                        tension: 0.1,
-                        pointRadius: 3,
-                        pointHoverRadius: 5,
-                        borderDash: [5, 5]  // Dashed line for underdog
-                    });
-                }
-                
-                colorIndex++;
             });
 
             // Get time labels from the first bookmaker with data
             const firstBookmaker = Object.keys(data)[0];
-            const timeLabels = data[firstBookmaker]?.favorite?.map(point => point.time) || 
-                              data[firstBookmaker]?.underdog?.map(point => point.time) || [];
+            const timeLabels = data[firstBookmaker]?.map(point => point.time) || [];
 
             new Chart(ctx, {
                 type: 'line',
@@ -1008,39 +970,23 @@ def organize_graph_data(df, game_id):
         
         if market == 'spreads':
             if bookmaker not in spreads_data:
-                spreads_data[bookmaker] = {'favorite': [], 'underdog': []}
+                spreads_data[bookmaker] = []
             
-            # Determine if this is favorite or underdog based on point
+            # For spreads, use the point value as the main line
             if pd.notna(point) and point != "":
-                point_val = float(point)
-                if point_val < 0:  # Negative point = favorite
-                    spreads_data[bookmaker]['favorite'].append({
-                        'time': formatted_time,
-                        'point': abs(point_val),
-                        'price': price,
-                        'team': outcome_name
-                    })
-                else:  # Positive point = underdog
-                    spreads_data[bookmaker]['underdog'].append({
-                        'time': formatted_time,
-                        'point': point_val,
-                        'price': price,
-                        'team': outcome_name
-                    })
+                spreads_data[bookmaker].append({
+                    'time': formatted_time,
+                    'point': float(point),
+                    'team': outcome_name
+                })
         
         elif market == 'h2h':
             if bookmaker not in moneyline_data:
-                moneyline_data[bookmaker] = {'favorite': [], 'underdog': []}
+                moneyline_data[bookmaker] = []
             
-            # Determine favorite vs underdog based on price
-            if price < 0:  # Negative price = favorite
-                moneyline_data[bookmaker]['favorite'].append({
-                    'time': formatted_time,
-                    'price': price,
-                    'team': outcome_name
-                })
-            else:  # Positive price = underdog
-                moneyline_data[bookmaker]['underdog'].append({
+            # For moneyline, use the favorite's price (negative odds)
+            if price < 0:  # Only track the favorite
+                moneyline_data[bookmaker].append({
                     'time': formatted_time,
                     'price': price,
                     'team': outcome_name
