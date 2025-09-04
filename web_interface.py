@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 NFL Odds Logger - Web Interface
-Provides a clean dashboard for viewing odds data
+Provides a clean dashboard for viewing odds data with line movement graphs
 """
 
 import os
@@ -14,7 +14,7 @@ import pytz
 
 app = Flask(__name__)
 
-# HTML Template with improved formatting
+# HTML Template with improved formatting and interactive graphs
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
@@ -22,6 +22,7 @@ HTML_TEMPLATE = """
     <title>NFL Odds Logger Dashboard</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         * { 
             margin: 0; 
@@ -116,6 +117,15 @@ HTML_TEMPLATE = """
             border-radius: 12px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
             overflow: hidden;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .game-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+        }
+        .game-card.expanded {
+            transform: none;
         }
         .game-header {
             background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
@@ -135,6 +145,12 @@ HTML_TEMPLATE = """
         }
         .game-content {
             padding: 20px;
+        }
+        .game-overview {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
         }
         .bet-type-section {
             margin-bottom: 25px;
@@ -188,6 +204,49 @@ HTML_TEMPLATE = """
             color: #6c757d;
             font-size: 0.9rem;
         }
+        .game-details {
+            display: none;
+            padding: 20px;
+            background: #f8f9fa;
+            border-top: 1px solid #e9ecef;
+        }
+        .game-details.expanded {
+            display: block;
+        }
+        .graph-tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e9ecef;
+        }
+        .graph-tab {
+            padding: 12px 24px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            color: #6c757d;
+            border-bottom: 2px solid transparent;
+            transition: all 0.3s;
+        }
+        .graph-tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+        .graph-tab:hover {
+            color: #495057;
+        }
+        .graph-container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .graph-placeholder {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+            font-style: italic;
+        }
         .last-updated {
             text-align: center;
             color: #6c757d;
@@ -201,6 +260,13 @@ HTML_TEMPLATE = """
             padding: 40px;
             color: #6c757d;
             font-style: italic;
+        }
+        .expand-icon {
+            margin-left: 10px;
+            transition: transform 0.3s;
+        }
+        .expand-icon.expanded {
+            transform: rotate(180deg);
         }
     </style>
 </head>
@@ -246,6 +312,232 @@ HTML_TEMPLATE = """
             </a>
         </div>
     </div>
+
+    <script>
+        // Toggle game expansion
+        function toggleGame(gameId) {
+            const gameCard = document.getElementById(`game-${gameId}`);
+            const gameDetails = document.getElementById(`details-${gameId}`);
+            const expandIcon = document.getElementById(`expand-${gameId}`);
+            
+            if (gameDetails.classList.contains('expanded')) {
+                gameDetails.classList.remove('expanded');
+                gameCard.classList.remove('expanded');
+                expandIcon.classList.remove('expanded');
+                expandIcon.textContent = '▼';
+            } else {
+                gameDetails.classList.add('expanded');
+                gameCard.classList.add('expanded');
+                expandIcon.classList.add('expanded');
+                expandIcon.textContent = '▲';
+                
+                // Load graphs if not already loaded
+                if (!gameDetails.dataset.graphsLoaded) {
+                    loadGameGraphs(gameId);
+                    gameDetails.dataset.graphsLoaded = 'true';
+                }
+            }
+        }
+
+        // Toggle graph tabs
+        function showGraphTab(gameId, tabName) {
+            // Hide all tabs
+            const tabs = document.querySelectorAll(`[data-game="${gameId}"] .graph-tab`);
+            const contents = document.querySelectorAll(`[data-game="${gameId}"] .graph-content`);
+            
+            tabs.forEach(tab => tab.classList.remove('active'));
+            contents.forEach(content => content.style.display = 'none');
+            
+            // Show selected tab
+            document.getElementById(`tab-${gameId}-${tabName}`).classList.add('active');
+            document.getElementById(`content-${gameId}-${tabName}`).style.display = 'block';
+        }
+
+        // Load game graphs
+        function loadGameGraphs(gameId) {
+            fetch(`/api/game/${gameId}/graphs`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.spreads) createSpreadChart(gameId, data.spreads);
+                    if (data.moneyline) createMoneylineChart(gameId, data.moneyline);
+                    if (data.totals) createTotalsChart(gameId, data.totals);
+                })
+                .catch(error => {
+                    console.error('Error loading graphs:', error);
+                    document.getElementById(`content-${gameId}-spreads`).innerHTML = 
+                        '<div class="graph-placeholder">Error loading line movement data</div>';
+                });
+        }
+
+        // Create spread chart
+        function createSpreadChart(gameId, data) {
+            const ctx = document.getElementById(`chart-${gameId}-spreads`);
+            if (!ctx) return;
+
+            const datasets = [];
+            const colors = ['#667eea', '#764ba2', '#f093fb', '#f5576c', '#4facfe', '#00f2fe'];
+            
+            Object.keys(data).forEach((bookmaker, index) => {
+                const color = colors[index % colors.length];
+                datasets.push({
+                    label: bookmaker,
+                    data: data[bookmaker].map(point => point.point),
+                    borderColor: color,
+                    backgroundColor: color + '20',
+                    tension: 0.1,
+                    pointRadius: 3,
+                    pointHoverRadius: 5
+                });
+            });
+
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data[Object.keys(data)[0]]?.map(point => point.time) || [],
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Point Spread Movement'
+                        },
+                        legend: {
+                            position: 'top'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            reverse: true,
+                            title: {
+                                display: true,
+                                text: 'Point Spread'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Time'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Create moneyline chart
+        function createMoneylineChart(gameId, data) {
+            const ctx = document.getElementById(`chart-${gameId}-moneyline`);
+            if (!ctx) return;
+
+            const datasets = [];
+            const colors = ['#667eea', '#764ba2', '#f093fb', '#f5576c', '#4facfe', '#00f2fe'];
+            
+            Object.keys(data).forEach((bookmaker, index) => {
+                const color = colors[index % colors.length];
+                datasets.push({
+                    label: bookmaker,
+                    data: data[bookmaker].map(point => point.price),
+                    borderColor: color,
+                    backgroundColor: color + '20',
+                    tension: 0.1,
+                    pointRadius: 3,
+                    pointHoverRadius: 5
+                });
+            });
+
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data[Object.keys(data)[0]]?.map(point => point.time) || [],
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Moneyline Movement'
+                        },
+                        legend: {
+                            position: 'top'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Odds'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Time'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Create totals chart
+        function createTotalsChart(gameId, data) {
+            const ctx = document.getElementById(`chart-${gameId}-totals`);
+            if (!ctx) return;
+
+            const datasets = [];
+            const colors = ['#667eea', '#764ba2', '#f093fb', '#f5576c', '#4facfe', '#00f2fe'];
+            
+            Object.keys(data).forEach((bookmaker, index) => {
+                const color = colors[index % colors.length];
+                datasets.push({
+                    label: bookmaker,
+                    data: data[bookmaker].map(point => point.point),
+                    borderColor: color,
+                    backgroundColor: color + '20',
+                    tension: 0.1,
+                    pointRadius: 3,
+                    pointHoverRadius: 5
+                });
+            });
+
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data[Object.keys(data)[0]]?.map(point => point.time) || [],
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Total Points Movement'
+                        },
+                        legend: {
+                            position: 'top'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Total Points'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Time'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    </script>
 </body>
 </html>
 """
@@ -274,6 +566,16 @@ def format_game_time(commence_time):
     except:
         return commence_time
 
+def format_time_for_chart(timestamp_str):
+    """Format timestamp for chart display"""
+    try:
+        dt = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+        local_tz = pytz.timezone('America/New_York')
+        local_dt = dt.astimezone(local_tz)
+        return local_dt.strftime("%m/%d %H:%M")
+    except:
+        return timestamp_str
+
 def organize_data_by_games(df):
     """Organize odds data by games"""
     games = {}
@@ -288,13 +590,15 @@ def organize_data_by_games(df):
         outcome_name = row['outcome_name']
         price = row['price']
         point = row['point']
+        timestamp = row['timestamp']
         
         if game_id not in games:
             games[game_id] = {
                 'home_team': home_team,
                 'away_team': away_team,
                 'commence_time': commence_time,
-                'bookmakers': {}
+                'bookmakers': {},
+                'historical_data': {}
             }
         
         if bookmaker not in games[game_id]['bookmakers']:
@@ -308,11 +612,25 @@ def organize_data_by_games(df):
             'price': price,
             'point': point
         })
+        
+        # Store historical data for graphs
+        if bookmaker not in games[game_id]['historical_data']:
+            games[game_id]['historical_data'][bookmaker] = {}
+        
+        if market not in games[game_id]['historical_data'][bookmaker]:
+            games[game_id]['historical_data'][bookmaker][market] = []
+        
+        games[game_id]['historical_data'][bookmaker][market].append({
+            'timestamp': timestamp,
+            'outcome_name': outcome_name,
+            'price': price,
+            'point': point
+        })
     
     return games
 
 def generate_games_html(games):
-    """Generate HTML for games display"""
+    """Generate HTML for games display with interactive graphs"""
     if not games:
         return '<div class="no-data">No games data available yet. The logger will start collecting data soon.</div>'
     
@@ -321,15 +639,18 @@ def generate_games_html(games):
     for game_id, game_data in games.items():
         # Game header
         game_html = f'''
-        <div class="game-card">
+        <div class="game-card" id="game-{game_id}" onclick="toggleGame('{game_id}')">
             <div class="game-header">
                 <div class="game-teams">{game_data['away_team']} @ {game_data['home_team']}</div>
-                <div class="game-time">{format_game_time(game_data['commence_time'])}</div>
+                <div class="game-time">
+                    {format_game_time(game_data['commence_time'])}
+                    <span class="expand-icon" id="expand-{game_id}">▼</span>
+                </div>
             </div>
             <div class="game-content">
         '''
         
-        # Process each bookmaker
+        # Process each bookmaker for overview
         for bookmaker, markets in game_data['bookmakers'].items():
             for market, odds in markets.items():
                 # Market title
@@ -382,10 +703,129 @@ def generate_games_html(games):
                 game_html += '</div>'  # Close bookmakers-grid
                 game_html += '</div>'  # Close bet-type-section
         
-        game_html += '</div></div>'  # Close game-content and game-card
+        game_html += '</div>'  # Close game-content
+        
+        # Add expandable details section with graphs
+        game_html += f'''
+        <div class="game-details" id="details-{game_id}" data-game="{game_id}">
+            <div class="graph-tabs">
+                <button class="graph-tab active" id="tab-{game_id}-spreads" onclick="showGraphTab('{game_id}', 'spreads')">
+                    Point Spreads
+                </button>
+                <button class="graph-tab" id="tab-{game_id}-moneyline" onclick="showGraphTab('{game_id}', 'moneyline')">
+                    Moneyline
+                </button>
+                <button class="graph-tab" id="tab-{game_id}-totals" onclick="showGraphTab('{game_id}', 'totals')">
+                    Totals
+                </button>
+            </div>
+            
+            <div class="graph-content" id="content-{game_id}-spreads" style="display: block;">
+                <div class="graph-container">
+                    <canvas id="chart-{game_id}-spreads"></canvas>
+                </div>
+            </div>
+            
+            <div class="graph-content" id="content-{game_id}-moneyline" style="display: none;">
+                <div class="graph-container">
+                    <canvas id="chart-{game_id}-moneyline"></canvas>
+                </div>
+            </div>
+            
+            <div class="graph-content" id="content-{game_id}-totals" style="display: none;">
+                <div class="graph-container">
+                    <canvas id="chart-{game_id}-totals"></canvas>
+                </div>
+            </div>
+        </div>
+        '''
+        
+        game_html += '</div>'  # Close game-card
         html_parts.append(game_html)
     
     return '\n'.join(html_parts)
+
+def get_historical_data_for_game(game_id):
+    """Get historical data for a specific game from all CSV files"""
+    csv_files = glob.glob("nfl_odds_*.csv")
+    if not csv_files:
+        return None
+    
+    all_data = []
+    
+    for csv_file in sorted(csv_files):
+        try:
+            df = pd.read_csv(csv_file)
+            game_data = df[df['game_id'] == game_id]
+            if not game_data.empty:
+                all_data.append(game_data)
+        except:
+            continue
+    
+    if not all_data:
+        return None
+    
+    # Combine all data and sort by timestamp
+    combined_df = pd.concat(all_data, ignore_index=True)
+    combined_df = combined_df.sort_values('timestamp')
+    
+    return combined_df
+
+def organize_graph_data(df, game_id):
+    """Organize data for graph display"""
+    if df is None or df.empty:
+        return None
+    
+    # Filter for the specific game
+    game_data = df[df['game_id'] == game_id]
+    if game_data.empty:
+        return None
+    
+    # Organize by market type
+    spreads_data = {}
+    moneyline_data = {}
+    totals_data = {}
+    
+    for _, row in game_data.iterrows():
+        bookmaker = row['bookmaker']
+        market = row['market']
+        timestamp = row['timestamp']
+        outcome_name = row['outcome_name']
+        price = row['price']
+        point = row['point']
+        
+        formatted_time = format_time_for_chart(timestamp)
+        
+        if market == 'spreads':
+            if bookmaker not in spreads_data:
+                spreads_data[bookmaker] = []
+            spreads_data[bookmaker].append({
+                'time': formatted_time,
+                'point': float(point) if pd.notna(point) and point != "" else None,
+                'price': price
+            })
+        elif market == 'h2h':
+            if bookmaker not in moneyline_data:
+                moneyline_data[bookmaker] = []
+            moneyline_data[bookmaker].append({
+                'time': formatted_time,
+                'price': price,
+                'outcome': outcome_name
+            })
+        elif market == 'totals':
+            if bookmaker not in totals_data:
+                totals_data[bookmaker] = []
+            totals_data[bookmaker].append({
+                'time': formatted_time,
+                'point': float(point) if pd.notna(point) and point != "" else None,
+                'price': price
+            })
+    
+    return {
+        'spreads': spreads_data if spreads_data else None,
+        'moneyline': moneyline_data if moneyline_data else None,
+        'totals': totals_data if totals_data else None
+    }
 
 def get_latest_csv_file():
     """Get the most recent CSV file"""
@@ -469,6 +909,23 @@ def dashboard():
         games_html=games_html,
         last_update=last_update
     )
+
+@app.route('/api/game/<game_id>/graphs')
+def game_graphs(game_id):
+    """API endpoint for game graph data"""
+    try:
+        # Get historical data for the game
+        historical_df = get_historical_data_for_game(game_id)
+        
+        if historical_df is None:
+            return jsonify({'error': 'No data found for this game'})
+        
+        # Organize data for graphs
+        graph_data = organize_graph_data(historical_df, game_id)
+        
+        return jsonify(graph_data)
+    except Exception as e:
+        return jsonify({'error': str(e)})
 
 @app.route('/api/stats')
 def api_stats():
