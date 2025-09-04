@@ -62,68 +62,85 @@ def record_api_usage():
         json.dump(data, f, indent=2)
 
 def save_to_csv(data):
-    # Create filename for today
-    today = datetime.now().strftime(DATE_FORMAT)
+    """Save odds data to CSV file"""
+    if not data:
+        print("❌ No data to save")
+        return
+    
+    # Create filename with current date
+    today = datetime.now().strftime("%Y-%m-%d")
     filename = f"nfl_odds_{today}.csv"
-
-    # Ensure file exists, otherwise create header
-    file_exists = os.path.isfile(filename)
-
-    with open(filename, mode="a", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-
+    
+    # Check if file exists to determine if we need headers
+    file_exists = os.path.exists(filename)
+    
+    # Save to daily CSV file
+    with open(filename, 'a', newline='', encoding='utf-8') as csvfile:
+        fieldnames = ['timestamp', 'game_id', 'commence_time', 'home_team', 'away_team', 
+                     'bookmaker', 'market', 'outcome_name', 'price', 'point']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        
         if not file_exists:
-            # Write header once
-            writer.writerow([
-                "timestamp", "game_id", "commence_time", "home_team", "away_team",
-                "bookmaker", "market", "outcome_name", "price", "point"
-            ])
-
-        timestamp = datetime.now().isoformat()
-
+            writer.writeheader()
+        
         for game in data:
-            game_id = game.get("id")
-            commence_time = game.get("commence_time")
-            home_team = game.get("home_team")
-            away_team = game.get("away_team")
+            for bookmaker in game['bookmakers']:
+                for market in bookmaker['markets']:
+                    for outcome in market['outcomes']:
+                        writer.writerow({
+                            'timestamp': datetime.now().isoformat(),
+                            'game_id': game['id'],
+                            'commence_time': game['commence_time'],
+                            'home_team': game['home_team'],
+                            'away_team': game['away_team'],
+                            'bookmaker': bookmaker['key'],
+                            'market': market['key'],
+                            'outcome_name': outcome['name'],
+                            'price': outcome['price'],
+                            'point': outcome.get('point', '')
+                        })
+    
+    print(f"✅ Data saved to {filename}")
 
-            for book in game.get("bookmakers", []):
-                bookmaker = book.get("title")
 
-                for market in book.get("markets", []):
-                    market_key = market.get("key")
-
-                    for outcome in market.get("outcomes", []):
-                        writer.writerow([
-                            timestamp,
-                            game_id,
-                            commence_time,
-                            home_team,
-                            away_team,
-                            bookmaker,
-                            market_key,
-                            outcome.get("name"),
-                            outcome.get("price"),
-                            outcome.get("point"),
-                        ])
 
 
 # -------------------------
 # MAIN
 # -------------------------
 if __name__ == "__main__":
-    print("Fetching NFL odds...")
-
+    print("🏈 NFL Odds Logger")
+    print("=" * 40)
+    print(f"🕐 Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    
+    # Check API key
+    api_key = os.environ.get('ODDS_API_KEY')
+    if not api_key:
+        print("❌ ERROR: ODDS_API_KEY environment variable not set!")
+        print("Please set your API key in Railway environment variables")
+        exit(1)
+    
+    print(f"✅ API Key found: {api_key[:8]}...")
+    
+    # Fetch odds data
+    print("🔄 Fetching NFL odds from API...")
     odds_data = fetch_odds()
+    
     if odds_data:
+        print(f"✅ Fetched data for {len(odds_data)} games")
         save_to_csv(odds_data)
         record_api_usage()  # Track API usage
-        print("✅ Odds appended to today's CSV.")
+        print("✅ Data collection completed successfully!")
         
         # Show usage stats
         try:
             from api_usage_tracker import get_usage_stats
             stats = get_usage_stats()
             print(f"📊 API Usage: {stats['current_month']}/{stats['monthly_limit']} calls ({stats['usage_percentage']:.1f}%)")
-        except:
-            pass
+        except Exception as e:
+            print(f"⚠️ Could not display usage stats: {e}")
+    else:
+        print("❌ Failed to fetch odds data")
+        exit(1)
+    
+    print(f"🕐 Finished at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
