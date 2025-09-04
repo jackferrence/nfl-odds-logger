@@ -439,8 +439,21 @@ HTML_TEMPLATE = """
             </div>
         </div>
         
-        <div class="games-container">
-            {{ games_html|safe }}
+        <div class="main-tabs">
+            <button class="main-tab active" onclick="showMainTab('games')">Games & Odds</button>
+            <button class="main-tab" onclick="showMainTab('data')">Data Files</button>
+        </div>
+        
+        <div class="main-content" id="games-content">
+            <div class="games-container">
+                {{ games_html|safe }}
+            </div>
+        </div>
+        
+        <div class="main-content" id="data-content" style="display: none;">
+            <div class="data-files-container">
+                {{ data_files_html|safe }}
+            </div>
         </div>
         
         <div style="text-align: center; margin-top: 30px;">
@@ -913,6 +926,125 @@ def generate_games_html(games):
     
     return '\n'.join(html_parts)
 
+def generate_data_files_html():
+    """Generate HTML for data files view"""
+    # Get all CSV files
+    csv_files = glob.glob("*.csv")
+    game_files = glob.glob("games/*.csv")
+    
+    if not csv_files and not game_files:
+        return '<div class="no-files">No data files found yet. Start collecting data to see files here.</div>'
+    
+    html_parts = []
+    
+    # Daily files section
+    if csv_files:
+        html_parts.append('<div class="data-section">')
+        html_parts.append('<h3>📅 Daily Data Files</h3>')
+        html_parts.append('<div class="file-grid">')
+        
+        for csv_file in sorted(csv_files, reverse=True):
+            try:
+                file_size = os.path.getsize(csv_file)
+                file_time = datetime.fromtimestamp(os.path.getctime(csv_file))
+                
+                html_parts.append(f'''
+                <div class="file-card">
+                    <div class="file-name">{csv_file}</div>
+                    <div class="file-info">
+                        📊 Size: {file_size:,} bytes<br>
+                        📅 Created: {file_time.strftime('%Y-%m-%d %H:%M:%S')}
+                    </div>
+                    <div class="file-actions">
+                        <a href="/download/file/{csv_file}" class="file-btn download">📥 Download</a>
+                        <a href="/view/file/{csv_file}" class="file-btn view">👁️ View</a>
+                    </div>
+                </div>
+                ''')
+            except:
+                continue
+        
+        html_parts.append('</div>')
+        html_parts.append('</div>')
+    
+    # Game-specific files section
+    if game_files:
+        html_parts.append('<div class="data-section">')
+        html_parts.append('<h3>🏈 Game-Specific Data Files</h3>')
+        html_parts.append('<div class="file-grid">')
+        
+        for csv_file in sorted(game_files, reverse=True):
+            try:
+                file_size = os.path.getsize(csv_file)
+                file_time = datetime.fromtimestamp(os.path.getctime(csv_file))
+                
+                # Extract game info from filename
+                filename = os.path.basename(csv_file)
+                
+                html_parts.append(f'''
+                <div class="file-card">
+                    <div class="file-name">{filename}</div>
+                    <div class="file-info">
+                        📊 Size: {file_size:,} bytes<br>
+                        📅 Created: {file_time.strftime('%Y-%m-%d %H:%M:%S')}
+                    </div>
+                    <div class="file-actions">
+                        <a href="/download/file/{csv_file}" class="file-btn download">📥 Download</a>
+                        <a href="/view/file/{csv_file}" class="file-btn view">👁️ View</a>
+                    </div>
+                </div>
+                ''')
+            except:
+                continue
+        
+        html_parts.append('</div>')
+        html_parts.append('</div>')
+    
+    return '\n'.join(html_parts)
+
+def save_game_specific_data(df):
+    """Save data to game-specific CSV files for permanent storage"""
+    if df is None or df.empty:
+        return
+    
+    # Create games directory if it doesn't exist
+    games_dir = "games"
+    if not os.path.exists(games_dir):
+        os.makedirs(games_dir)
+    
+    # Group data by game_id
+    for game_id in df['game_id'].unique():
+        game_data = df[df['game_id'] == game_id]
+        
+        if not game_data.empty:
+            # Get game info for filename
+            home_team = game_data['home_team'].iloc[0]
+            away_team = game_data['away_team'].iloc[0]
+            commence_time = game_data['commence_time'].iloc[0]
+            
+            # Parse commence time for date
+            try:
+                game_date = datetime.fromisoformat(commence_time.replace('Z', '+00:00'))
+                date_str = game_date.strftime('%Y-%m-%d')
+            except:
+                date_str = datetime.now().strftime('%Y-%m-%d')
+            
+            # Create filename: games/YYYY-MM-DD_away_home_gameid.csv
+            safe_away = away_team.replace(' ', '_').replace('&', 'and')
+            safe_home = home_team.replace(' ', '_').replace('&', 'and')
+            filename = f"{date_str}_{safe_away}_at_{safe_home}_{game_id}.csv"
+            filepath = os.path.join(games_dir, filename)
+            
+            # Append to existing file or create new one
+            if os.path.exists(filepath):
+                # Append new data to existing file
+                game_data.to_csv(filepath, mode='a', header=False, index=False)
+            else:
+                # Create new file with headers
+                game_data.to_csv(filepath, index=False)
+            
+            print(f"💾 Saved game data: {filename}")
+
 def get_historical_data_for_game(game_id):
     """Get historical data for a specific game from all CSV files"""
     csv_files = glob.glob("nfl_odds_*.csv")
@@ -1253,6 +1385,9 @@ def dashboard():
             # Generate games HTML
             games_html = generate_games_html(games)
             
+            # Generate data files HTML
+            data_files_html = generate_data_files_html()
+            
             # Calculate stats
             total_games = len(games)
             total_odds = len(df)
@@ -1279,6 +1414,7 @@ def dashboard():
         api_calls=usage_stats["calls"],
         remaining_calls=usage_stats["remaining"],
         games_html=games_html,
+        data_files_html=data_files_html, # Pass data_files_html to the template
         last_update=last_update
     )
 
@@ -1335,6 +1471,26 @@ def download_latest():
         return send_file(latest_file, as_attachment=True)
     else:
         return "No data available", 404
+
+@app.route('/download/file/<filename>')
+def download_specific_file(filename):
+    """Download a specific CSV file"""
+    filepath = os.path.join(".", filename)
+    if os.path.exists(filepath):
+        return send_file(filepath, as_attachment=True)
+    else:
+        return "File not found", 404
+
+@app.route('/view/file/<filename>')
+def view_specific_file(filename):
+    """View a specific CSV file in the browser"""
+    filepath = os.path.join(".", filename)
+    if os.path.exists(filepath):
+        with open(filepath, 'r') as f:
+            content = f.read()
+        return render_template_string(f"<pre>{content}</pre>")
+    else:
+        return "File not found", 404
 
 if __name__ == '__main__':
     # Install required packages
