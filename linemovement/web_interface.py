@@ -281,5 +281,7 @@ if __name__ == '__main__':
         subprocess.run([sys.executable, "-m", "pip", "install", "flask", "pandas"])
     
     print("🌐 Starting web interface...")
-    print("📊 Dashboard will be available at: http://localhost:5000")
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    # Use Railway's PORT environment variable, default to 5000 for local development
+    port = int(os.environ.get('PORT', 5000))
+    print(f"📊 Dashboard will be available at: http://localhost:{port}")
+    app.run(host='0.0.0.0', port=port, debug=False)
