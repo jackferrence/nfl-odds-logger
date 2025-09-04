@@ -404,6 +404,110 @@ HTML_TEMPLATE = """
             color: #28a745;
             font-weight: bold;
         }
+        .point-down {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        .main-tabs {
+            display: flex;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #e9ecef;
+        }
+        .main-tab {
+            padding: 15px 30px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            color: #6c757d;
+            border-bottom: 2px solid transparent;
+            transition: all 0.3s;
+            font-size: 1rem;
+        }
+        .main-tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+        .main-tab:hover {
+            color: #495057;
+        }
+        .main-content {
+            min-height: 400px;
+        }
+        .data-files-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            padding: 30px;
+        }
+        .data-section {
+            margin-bottom: 40px;
+        }
+        .data-section h3 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #ecf0f1;
+        }
+        .file-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .file-card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            border-left: 3px solid #667eea;
+            transition: transform 0.2s;
+        }
+        .file-card:hover {
+            transform: translateY(-2px);
+        }
+        .file-name {
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 10px;
+            font-size: 1rem;
+        }
+        .file-info {
+            color: #6c757d;
+            font-size: 0.9rem;
+            margin-bottom: 15px;
+        }
+        .file-actions {
+            display: flex;
+            gap: 10px;
+        }
+        .file-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .file-btn.download {
+            background: #667eea;
+            color: white;
+        }
+        .file-btn.download:hover {
+            background: #5a6fd8;
+        }
+        .file-btn.view {
+            background: #28a745;
+            color: white;
+        }
+        .file-btn.view:hover {
+            background: #218838;
+        }
+        .no-files {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+            font-style: italic;
+        }
 
     </style>
 </head>
@@ -464,6 +568,20 @@ HTML_TEMPLATE = """
     </div>
 
     <script>
+        // Toggle main tabs
+        function showMainTab(tabName) {
+            // Hide all main content
+            const contents = document.querySelectorAll('.main-content');
+            const tabs = document.querySelectorAll('.main-tab');
+            
+            contents.forEach(content => content.style.display = 'none');
+            tabs.forEach(tab => tab.classList.remove('active'));
+            
+            // Show selected content and activate tab
+            document.getElementById(`${tabName}-content`).style.display = 'block';
+            event.target.classList.add('active');
+        }
+
         // Toggle game expansion
         function toggleGame(gameId) {
             const gameCard = document.getElementById(`game-${gameId}`);
@@ -512,7 +630,8 @@ HTML_TEMPLATE = """
                 .then(response => response.json())
                 .then(data => {
                     if (data.spreads) createSpreadChart(gameId, data.spreads);
-                    if (data.moneyline) createMoneylineChart(gameId, data.moneyline);
+                    if (data.moneyline_favorite) createMoneylineFavoriteChart(gameId, data.moneyline_favorite);
+                    if (data.moneyline_underdog) createMoneylineUnderdogChart(gameId, data.moneyline_underdog);
                     if (data.totals) createTotalsChart(gameId, data.totals);
                 })
                 .catch(error => {
@@ -522,7 +641,7 @@ HTML_TEMPLATE = """
                 });
         }
 
-        // Create spread chart
+        // Create spread chart with improved display
         function createSpreadChart(gameId, data) {
             const ctx = document.getElementById(`chart-${gameId}-spreads`);
             if (!ctx) return;
@@ -561,7 +680,7 @@ HTML_TEMPLATE = """
                     plugins: {
                         title: {
                             display: true,
-                            text: 'Point Spread Movement'
+                            text: 'Point Spread Movement (Higher = Favorite, Lower = Underdog)'
                         },
                         legend: {
                             position: 'top'
@@ -569,10 +688,138 @@ HTML_TEMPLATE = """
                     },
                     scales: {
                         y: {
-                            reverse: true,
+                            reverse: false,
                             title: {
                                 display: true,
                                 text: 'Point Spread'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Time'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Create moneyline favorite chart
+        function createMoneylineFavoriteChart(gameId, data) {
+            const ctx = document.getElementById(`chart-${gameId}-moneyline-favorite`);
+            if (!ctx) return;
+
+            const datasets = [];
+            const colors = ['#667eea', '#764ba2', '#f093fb', '#f5576c', '#4facfe', '#00f2fe'];
+            
+            Object.keys(data).forEach((bookmaker, index) => {
+                const color = colors[index % colors.length];
+                
+                if (data[bookmaker] && data[bookmaker].length > 0) {
+                    datasets.push({
+                        label: bookmaker,
+                        data: data[bookmaker].map(point => point.price),
+                        borderColor: color,
+                        backgroundColor: color + '20',
+                        tension: 0.1,
+                        pointRadius: 3,
+                        pointHoverRadius: 5
+                    });
+                }
+            });
+
+            // Get time labels from the first bookmaker with data
+            const firstBookmaker = Object.keys(data)[0];
+            const timeLabels = data[firstBookmaker]?.map(point => point.time) || [];
+
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: timeLabels,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Moneyline Favorite Movement'
+                        },
+                        legend: {
+                            position: 'top'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            reverse: false,
+                            title: {
+                                display: true,
+                                text: 'Favorite Odds'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Time'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Create moneyline underdog chart
+        function createMoneylineUnderdogChart(gameId, data) {
+            const ctx = document.getElementById(`chart-${gameId}-moneyline-underdog`);
+            if (!ctx) return;
+
+            const datasets = [];
+            const colors = ['#667eea', '#764ba2', '#f093fb', '#f5576c', '#4facfe', '#00f2fe'];
+            
+            Object.keys(data).forEach((bookmaker, index) => {
+                const color = colors[index % colors.length];
+                
+                if (data[bookmaker] && data[bookmaker].length > 0) {
+                    datasets.push({
+                        label: bookmaker,
+                        data: data[bookmaker].map(point => point.price),
+                        borderColor: color,
+                        backgroundColor: color + '20',
+                        tension: 0.1,
+                        pointRadius: 3,
+                        pointHoverRadius: 5
+                    });
+                }
+            });
+
+            // Get time labels from the first bookmaker with data
+            const firstBookmaker = Object.keys(data)[0];
+            const timeLabels = data[firstBookmaker]?.map(point => point.time) || [];
+
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: timeLabels,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Moneyline Underdog Movement'
+                        },
+                        legend: {
+                            position: 'top'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            reverse: false,
+                            title: {
+                                display: true,
+                                text: 'Underdog Odds'
                             }
                         },
                         x: {
@@ -893,8 +1140,11 @@ def generate_games_html(games):
                 <button class="graph-tab active" id="tab-{game_id}-spreads" onclick="showGraphTab('{game_id}', 'spreads', event)">
                     Point Spreads
                 </button>
-                <button class="graph-tab" id="tab-{game_id}-moneyline" onclick="showGraphTab('{game_id}', 'moneyline', event)">
-                    Moneyline
+                <button class="graph-tab" id="tab-{game_id}-moneyline-favorite" onclick="showGraphTab('{game_id}', 'moneyline-favorite', event)">
+                    ML Favorite
+                </button>
+                <button class="graph-tab" id="tab-{game_id}-moneyline-underdog" onclick="showGraphTab('{game_id}', 'moneyline-underdog', event)">
+                    ML Underdog
                 </button>
                 <button class="graph-tab" id="tab-{game_id}-totals" onclick="showGraphTab('{game_id}', 'totals', event)">
                     Totals
@@ -907,9 +1157,15 @@ def generate_games_html(games):
                 </div>
             </div>
             
-            <div class="graph-content" id="content-{game_id}-moneyline" style="display: none;">
+            <div class="graph-content" id="content-{game_id}-moneyline-favorite" style="display: none;">
                 <div class="graph-container">
-                    <canvas id="chart-{game_id}-moneyline"></canvas>
+                    <canvas id="chart-{game_id}-moneyline-favorite"></canvas>
+                </div>
+            </div>
+            
+            <div class="graph-content" id="content-{game_id}-moneyline-underdog" style="display: none;">
+                <div class="graph-container">
+                    <canvas id="chart-{game_id}-moneyline-underdog"></canvas>
                 </div>
             </div>
             
@@ -1087,7 +1343,8 @@ def organize_graph_data(df, game_id):
     
     # Organize by market type
     spreads_data = {}
-    moneyline_data = {}
+    moneyline_favorite_data = {}
+    moneyline_underdog_data = {}
     totals_data = {}
     
     for _, row in game_data.iterrows():
@@ -1113,12 +1370,19 @@ def organize_graph_data(df, game_id):
                 })
         
         elif market == 'h2h':
-            if bookmaker not in moneyline_data:
-                moneyline_data[bookmaker] = []
-            
-            # For moneyline, use the favorite's price (negative odds)
-            if price < 0:  # Only track the favorite
-                moneyline_data[bookmaker].append({
+            # Separate favorite and underdog moneyline data
+            if price < 0:  # Favorite (negative odds)
+                if bookmaker not in moneyline_favorite_data:
+                    moneyline_favorite_data[bookmaker] = []
+                moneyline_favorite_data[bookmaker].append({
+                    'time': formatted_time,
+                    'price': price,
+                    'team': outcome_name
+                })
+            else:  # Underdog (positive odds)
+                if bookmaker not in moneyline_underdog_data:
+                    moneyline_underdog_data[bookmaker] = []
+                moneyline_underdog_data[bookmaker].append({
                     'time': formatted_time,
                     'price': price,
                     'team': outcome_name
@@ -1136,7 +1400,8 @@ def organize_graph_data(df, game_id):
     
     return {
         'spreads': spreads_data if spreads_data else None,
-        'moneyline': moneyline_data if moneyline_data else None,
+        'moneyline_favorite': moneyline_favorite_data if moneyline_favorite_data else None,
+        'moneyline_underdog': moneyline_underdog_data if moneyline_underdog_data else None,
         'totals': totals_data if totals_data else None
     }
 
