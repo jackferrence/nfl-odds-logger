@@ -11,6 +11,12 @@ import sys
 import os
 from datetime import datetime
 
+# Add virtual environment to Python path
+venv_path = '/opt/venv'
+if os.path.exists(venv_path):
+    sys.path.insert(0, f'{venv_path}/lib/python3.11/site-packages')
+    print(f"🐍 Added virtual environment to Python path: {venv_path}")
+
 def run_scheduler():
     """Run the odds logger scheduler in background"""
     print("🔄 Starting odds logger scheduler...")
@@ -39,6 +45,25 @@ def main():
     print(f"📊 Web dashboard: http://localhost:{port}")
     print("⏰ Scheduler: Running in background")
     print("=" * 50)
+    
+    # Debug virtual environment
+    venv_path = '/opt/venv'
+    if os.path.exists(venv_path):
+        print(f"✅ Virtual environment found at: {venv_path}")
+        site_packages = f'{venv_path}/lib/python3.11/site-packages'
+        if os.path.exists(site_packages):
+            print(f"✅ Site packages found at: {site_packages}")
+            # List installed packages
+            try:
+                import pkg_resources
+                installed_packages = [d.project_name for d in pkg_resources.working_set]
+                print(f"📦 Installed packages: {installed_packages[:10]}...")  # Show first 10
+            except:
+                print("⚠️ Could not list installed packages")
+        else:
+            print(f"❌ Site packages not found at: {site_packages}")
+    else:
+        print(f"❌ Virtual environment not found at: {venv_path}")
     
     # Change to linemovement directory where the code is
     os.chdir('linemovement')
