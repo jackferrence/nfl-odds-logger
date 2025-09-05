@@ -36,13 +36,13 @@ def main():
     print("=" * 50)
     print("🚀 Starting both scheduler and web interface...")
     port = os.environ.get('PORT', 5000)
-    print("📊 Web dashboard: http://localhost:5000")
+    print(f"📊 Web dashboard: http://localhost:{port}")
     print("⏰ Scheduler: Running in background")
     print("=" * 50)
     
-    # Install dependencies
-    print("📦 Installing dependencies...")
-    subprocess.run(["python3", "-m", "pip", "install", "-r", "requirements.txt"])
+    # Change to linemovement directory where the code is
+    os.chdir('linemovement')
+    print(f"📁 Working directory: {os.getcwd()}")
     
     # Start scheduler in background thread
     scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
